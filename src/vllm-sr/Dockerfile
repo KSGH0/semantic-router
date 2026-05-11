@@ -282,7 +282,5 @@ RUN chmod +x /app/start-router.sh
 
 EXPOSE 50051 8080 9190
 
-VOLUME ["/app/models"]
-
 ENTRYPOINT ["/app/start-router.sh"]
 CMD ["/app/config.yaml"]
