@@ -152,8 +152,6 @@ FROM python:3.11-slim AS final
 ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
-ENV SKIP_DOCKER_CHECK=true
-
 # OCI labels
 LABEL org.opencontainers.image.title="vLLM Semantic Router"
 LABEL org.opencontainers.image.description="System-Level Intelligent Router for Mixture-of-Models"
@@ -181,6 +179,8 @@ WORKDIR /app
 RUN mkdir -p /app/.vllm-sr /app/config /app/models
 
 COPY railway.toml /app/railway.toml
+COPY entrypoint.py /app/entrypoint.py
+RUN chmod +x /app/entrypoint.py
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" 2>/dev/null || \
@@ -188,5 +188,5 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
 
 EXPOSE ${PORT}
 
-ENTRYPOINT ["vllm-sr"]
-CMD ["serve"]
+ENTRYPOINT ["python", "/app/entrypoint.py"]
+CMD ["vllm-sr", "serve"]
