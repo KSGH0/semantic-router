@@ -1,6 +1,21 @@
 #!/usr/bin/env python3
 """Entrypoint for Railway deployment - patches Docker availability check."""
+import os
+import stat
 import sys
+
+
+def create_fake_docker():
+    """Create a fake docker binary that exits 0."""
+    fake_docker = "#!/bin/sh\nexit 0\n"
+    docker_path = "/usr/local/bin/docker"
+    try:
+        with open(docker_path, "w") as f:
+            f.write(fake_docker)
+        os.chmod(docker_path, stat.S_IRWXU | stat.S_IRGRP | stat.S_IXGRP | stat.S_IROTH | stat.S_IXOTH)
+        print("Created fake docker binary")
+    except Exception as e:
+        print(f"Warning: Could not create fake docker: {e}")
 
 
 def patch_docker_check():
@@ -42,6 +57,9 @@ def patch_docker_check():
 
 
 if __name__ == "__main__":
+    # Create fake docker binary BEFORE applying monkeypatches
+    create_fake_docker()
+
     # Apply monkeypatch BEFORE importing vllm-sr CLI logic
     patch_docker_check()
 
