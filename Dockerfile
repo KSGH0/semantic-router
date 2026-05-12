@@ -126,7 +126,7 @@ LABEL org.opencontainers.image.source="https://github.com/vllm-project/semantic-
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Runtime configuration
-ENV PORT=8080
+ENV PORT=8899
 ENV VLLM_SR_CONFIG=/app/config.yaml
 
 # Install vllm-sr from PyPI into the Python 3.10 venv
@@ -160,7 +160,7 @@ LABEL org.opencontainers.image.source="https://github.com/vllm-project/semantic-
 LABEL org.opencontainers.image.licenses="Apache-2.0"
 
 # Runtime configuration
-ENV PORT=8080
+ENV PORT=8899
 ENV VLLM_SR_CONFIG=/app/config.yaml
 
 RUN set -eux; \
