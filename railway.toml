@@ -1,6 +1,7 @@
 [build]
 builder = "DOCKERFILE"
 dockerfilePath = "./Dockerfile"
+target = "final"  # CPU-only target, not final-rocm
 
 [deploy]
 restartPolicyType = "ON_FAILURE"
