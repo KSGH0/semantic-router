@@ -102,49 +102,6 @@ ENV VIRTUAL_ENV=/opt/vllm-sr-venv
 ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
 
 # =============================================================================
-# Stage: final — CPU-only runtime (default target)
-# =============================================================================
-FROM python:3.11-slim AS final
-
-ENV VIRTUAL_ENV=/opt/vllm-sr-venv
-ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
-
-# OCI labels
-LABEL org.opencontainers.image.title="vLLM Semantic Router"
-LABEL org.opencontainers.image.description="System-Level Intelligent Router for Mixture-of-Models"
-LABEL org.opencontainers.image.vendor="vLLM-SR Team"
-LABEL org.opencontainers.image.source="https://github.com/vllm-project/semantic-router"
-LABEL org.opencontainers.image.licenses="Apache-2.0"
-
-# Runtime configuration
-ENV PORT=8080
-ENV VLLM_SR_CONFIG=/app/config.yaml
-
-RUN set -eux; \
-    apt-get update; \
-    apt-get install -y --no-install-recommends \
-        ca-certificates \
-        curl; \
-    apt-get clean; \
-    rm -rf /var/lib/apt/lists/*
-
-# Copy installed package from build stage
-COPY --from=build /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
-COPY --from=build /usr/local/bin/vllm-sr /usr/local/bin/vllm-sr
-
-WORKDIR /app
-RUN mkdir -p /app/.vllm-sr /app/config /app/models
-
-HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
-  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" 2>/dev/null || \
-      curl -sf http://localhost:${PORT}/health || exit 1
-
-EXPOSE ${PORT}
-
-ENTRYPOINT ["vllm-sr"]
-CMD ["serve"]
-
-# =============================================================================
 # Stage: final-rocm — ROCm/GPU runtime (used when --target final-rocm)
 # Based on rocm/dev-ubuntu-22.04:7.0 with full AMD GPU acceleration.
 # x86_64 only — ROCm does not support arm64 for this image.
@@ -177,6 +134,53 @@ RUN /opt/vllm-sr-venv/bin/pip install --no-cache-dir --pre vllm-sr
 
 WORKDIR /app
 RUN mkdir -p /app/.vllm-sr /app/config /app/models
+
+HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
+  CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" 2>/dev/null || \
+      curl -sf http://localhost:${PORT}/health || exit 1
+
+EXPOSE ${PORT}
+
+ENTRYPOINT ["vllm-sr"]
+CMD ["serve"]
+
+# =============================================================================
+# Stage: final — CPU-only runtime (default target, last stage = default)
+# =============================================================================
+FROM python:3.11-slim AS final
+
+ENV VIRTUAL_ENV=/opt/vllm-sr-venv
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+ENV SKIP_DOCKER_CHECK=true
+
+# OCI labels
+LABEL org.opencontainers.image.title="vLLM Semantic Router"
+LABEL org.opencontainers.image.description="System-Level Intelligent Router for Mixture-of-Models"
+LABEL org.opencontainers.image.vendor="vLLM-SR Team"
+LABEL org.opencontainers.image.source="https://github.com/vllm-project/semantic-router"
+LABEL org.opencontainers.image.licenses="Apache-2.0"
+
+# Runtime configuration
+ENV PORT=8080
+ENV VLLM_SR_CONFIG=/app/config.yaml
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        ca-certificates \
+        curl; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+# Copy installed package from build stage
+COPY --from=build /usr/local/lib/python3.11/site-packages /usr/local/lib/python3.11/site-packages
+COPY --from=build /usr/local/bin/vllm-sr /usr/local/bin/vllm-sr
+
+WORKDIR /app
+RUN mkdir -p /app/.vllm-sr /app/config /app/models
+
+COPY railway.toml /app/railway.toml
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=15s --retries=3 \
   CMD python3 -c "import urllib.request; urllib.request.urlopen('http://localhost:${PORT}/health')" 2>/dev/null || \
