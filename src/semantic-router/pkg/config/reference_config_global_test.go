@@ -7,6 +7,7 @@ func assertReferenceConfigRouterGlobalCoverage(t testingT, router map[string]int
 
 	assertMapCoversStructFields(t, router, reflect.TypeOf(CanonicalRouterGlobal{}), "global.router")
 	assertMapCoversStructFields(t, mustMapAt(t, router, "streamed_body"), reflect.TypeOf(CanonicalStreamedBody{}), "global.router.streamed_body")
+	assertMapCoversStructFields(t, mustMapAt(t, router, "skip_processing"), reflect.TypeOf(SkipProcessingConfig{}), "global.router.skip_processing")
 	assertMapCoversStructFields(t, modelSelection, reflect.TypeOf(ModelSelectionConfig{}), "global.router.model_selection")
 	assertReferenceConfigRouterSelectionCoverage(t, modelSelection)
 }
@@ -107,6 +108,7 @@ func assertReferenceConfigRouterReplayCoverage(t testingT, routerReplay map[stri
 	assertMapCoversStructFields(t, mustMapAt(t, routerReplay, "redis"), reflect.TypeOf(RouterReplayRedisConfig{}), "global.services.router_replay.redis")
 	assertMapCoversStructFields(t, mustMapAt(t, routerReplay, "postgres"), reflect.TypeOf(RouterReplayPostgresConfig{}), "global.services.router_replay.postgres")
 	assertMapCoversStructFields(t, mustMapAt(t, routerReplay, "milvus"), reflect.TypeOf(RouterReplayMilvusConfig{}), "global.services.router_replay.milvus")
+	assertMapCoversStructFields(t, mustMapAt(t, routerReplay, "qdrant"), reflect.TypeOf(RouterReplayQdrantConfig{}), "global.services.router_replay.qdrant")
 }
 
 func assertReferenceConfigStoreGlobalCoverage(t testingT, stores map[string]interface{}) {
@@ -121,12 +123,14 @@ func assertReferenceConfigSemanticCacheCoverage(t testingT, semanticCache map[st
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "redis"), reflect.TypeOf(RedisConfig{}), "global.stores.semantic_cache.redis")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "valkey"), reflect.TypeOf(ValkeyConfig{}), "global.stores.semantic_cache.valkey")
 	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.semantic_cache.milvus")
+	assertMapCoversStructFields(t, mustMapAt(t, semanticCache, "qdrant"), reflect.TypeOf(QdrantConfig{}), "global.stores.semantic_cache.qdrant")
 }
 
 func assertReferenceConfigMemoryCoverage(t testingT, memory map[string]interface{}) {
 	assertMapCoversStructFields(t, memory, reflect.TypeOf(MemoryConfig{}), "global.stores.memory")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "milvus"), reflect.TypeOf(MemoryMilvusConfig{}), "global.stores.memory.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "valkey"), reflect.TypeOf(MemoryValkeyConfig{}), "global.stores.memory.valkey")
+	assertMapCoversStructFields(t, mustMapAt(t, memory, "qdrant"), reflect.TypeOf(MemoryQdrantConfig{}), "global.stores.memory.qdrant")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "quality_scoring"), reflect.TypeOf(MemoryQualityScoringConfig{}), "global.stores.memory.quality_scoring")
 	assertMapCoversStructFields(t, mustMapAt(t, memory, "reflection"), reflect.TypeOf(MemoryReflectionConfig{}), "global.stores.memory.reflection")
 }
@@ -137,6 +141,7 @@ func assertReferenceConfigVectorStoreCoverage(t testingT, vectorStore map[string
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "llama_stack"), reflect.TypeOf(LlamaStackVectorStoreConfig{}), "global.stores.vector_store.llama_stack")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "milvus"), reflect.TypeOf(MilvusConfig{}), "global.stores.vector_store.milvus")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "valkey"), reflect.TypeOf(ValkeyVectorStoreConfig{}), "global.stores.vector_store.valkey")
+	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "qdrant"), reflect.TypeOf(QdrantVectorStoreConfig{}), "global.stores.vector_store.qdrant")
 	assertMapCoversStructFields(t, mustMapAt(t, vectorStore, "metadata_postgres"), reflect.TypeOf(VectorStoreMetadataPostgresConfig{}), "global.stores.vector_store.metadata_postgres")
 }
 
