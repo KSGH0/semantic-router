@@ -1,0 +1,17 @@
+{
+  "permissions": {
+    "allow": [
+      "PowerShell(Get-ChildItem \"c:\\\\GitFolder\\\\KsGit-Semantic-router\" -Name | Where-Object { $_ -match '^modal' -or $_ -match '^Dockerfile\\\\.' -or $_ -match '^MODAL' -or $_ -match '^main\\\\.' })",
+      "PowerShell(Get-ChildItem \"c:\\\\GitFolder\\\\KsGit-Semantic-router\" -Name | Where-Object { $_ -match '^modal|^Dockerfile|^MODAL|^main\\\\.' } | Sort-Object)",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -c \"import modal; import modal.__main__; print\\('modal imports OK, no toml patch needed'\\)\" 2>&1)",
+      "PowerShell(Rename-Item \"c:\\\\GitFolder\\\\KsGit-Semantic-router\\\\test_modal_deploy.py\" \"test_main.py\")",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -c \"import ast; ast.parse\\(open\\('c:/GitFolder/KsGit-Semantic-router/modal_app.py'\\).read\\(\\)\\); print\\('modal_app.py syntax OK'\\)\" 2>&1)",
+      "WebFetch(domain:modal.com)",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m modal token set --token-id ak-1l5eUzq9o01jE2DNreaDMu --token-secret as-zeGwp4YRDewzAHtWXIQ0RE 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m modal token --help 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m pip install pip-system-certs --quiet 2>&1)",
+      "PowerShell(& \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m modal deploy --help 2>&1)",
+      "PowerShell($env:PYTHONIOENCODING = \"utf-8\"; Set-Location \"c:\\\\GitFolder\\\\KsGit-Semantic-router\"; & \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m modal app stop vllm-semantic-router --yes 2>&1; & \"C:\\\\Users\\\\darsh\\\\AppData\\\\Local\\\\Programs\\\\Python\\\\Python312\\\\python.exe\" -m modal deploy modal_app.py 2>&1)"
+    ]
+  }
+}

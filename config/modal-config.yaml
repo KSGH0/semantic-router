@@ -1,0 +1,494 @@
+version: v0.3
+
+listeners:
+  - name: http-8899
+    address: 0.0.0.0
+    port: 8899
+    timeout: 300s
+
+providers:
+  defaults:
+    default_model: openai/gpt-4o-mini
+  models:
+    - name: openai/gpt-4o-mini
+      provider_model_id: openai/gpt-4o-mini
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.15
+        completion_per_1m: 0.60
+      external_model_ids:
+        openai: openai/gpt-4o-mini
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          chat_path: /api/v1/chat/completions
+          api_key_env: OPENROUTER_API_KEY
+          weight: 100
+
+    - name: openai/gpt-4o
+      provider_model_id: openai/gpt-4o
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 2.50
+        completion_per_1m: 10.00
+      external_model_ids:
+        openai: openai/gpt-4o
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          chat_path: /api/v1/chat/completions
+          api_key_env: OPENROUTER_API_KEY
+          weight: 100
+
+    - name: anthropic/claude-3.5-haiku
+      provider_model_id: anthropic/claude-3.5-haiku
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 0.80
+        completion_per_1m: 4.00
+      external_model_ids:
+        openai: anthropic/claude-3.5-haiku
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          chat_path: /api/v1/chat/completions
+          api_key_env: OPENROUTER_API_KEY
+          weight: 100
+
+    - name: anthropic/claude-sonnet-4.6
+      provider_model_id: anthropic/claude-sonnet-4.6
+      api_format: openai
+      pricing:
+        currency: USD
+        prompt_per_1m: 3.00
+        completion_per_1m: 15.00
+      external_model_ids:
+        openai: anthropic/claude-sonnet-4.6
+      backend_refs:
+        - name: openrouter
+          base_url: https://openrouter.ai/api/v1
+          provider: openai
+          auth_header: Authorization
+          auth_prefix: Bearer
+          chat_path: /api/v1/chat/completions
+          api_key_env: OPENROUTER_API_KEY
+          weight: 100
+
+routing:
+  modelCards:
+    - name: openai/gpt-4o-mini
+      param_size: 8B
+      context_window_size: 128000
+      description: Fast affordable OpenAI model for everyday requests.
+      capabilities: [chat, reasoning, tools]
+      quality_score: 0.80
+      modality: ar
+      tags: [default, fast, cheap]
+
+    - name: openai/gpt-4o
+      param_size: 200B
+      context_window_size: 128000
+      description: High-quality OpenAI model for complex tasks.
+      capabilities: [chat, reasoning, long-context, vision]
+      quality_score: 0.95
+      modality: ar
+      tags: [premium, complex]
+
+    - name: anthropic/claude-3.5-haiku
+      param_size: 20B
+      context_window_size: 200000
+      description: Fast Anthropic model for everyday tasks.
+      capabilities: [chat, reasoning, tools]
+      quality_score: 0.82
+      modality: ar
+      tags: [fast, anthropic]
+
+    - name: anthropic/claude-sonnet-4.6
+      param_size: 200B
+      context_window_size: 200000
+      description: Powerful Anthropic model for code and complex reasoning.
+      capabilities: [chat, reasoning, long-context, tools]
+      quality_score: 0.96
+      modality: ar
+      tags: [premium, anthropic, code]
+
+  signals:
+    keywords:
+      - name: code_task
+        operator: OR
+        method: bm25
+        keywords: [code, function, debug, algorithm, implement, refactor, python, javascript, sql, typescript, api, class, method]
+        case_sensitive: false
+        bm25_threshold: 0.1
+
+      - name: urgent_task
+        operator: OR
+        method: ngram
+        keywords: [urgent, asap, immediately, emergency, critical, now]
+        case_sensitive: false
+        ngram_threshold: 0.4
+        ngram_arity: 3
+
+      - name: sensitive_keywords
+        operator: OR
+        method: regex
+        keywords: ["social.security", "credit.card", "password", "api.key", "secret", "private.key"]
+        case_sensitive: false
+
+    complexity:
+      - name: needs_reasoning
+        threshold: 0.75
+        description: Multi-step reasoning or synthesis-heavy prompts.
+        hard:
+          candidates:
+            - solve this step by step
+            - compare multiple tradeoffs
+            - analyze the root cause
+            - write a detailed report
+            - explain the pros and cons
+        easy:
+          candidates:
+            - answer briefly
+            - quick summary
+            - simple rewrite
+
+    jailbreak:
+      - name: prompt_injection
+        method: hybrid
+        threshold: 0.8
+        include_history: true
+        description: Detect prompt injection or jailbreak attempts.
+        jailbreak_patterns:
+          - ignore previous instructions
+          - reveal the hidden prompt
+          - jailbreak mode
+        benign_patterns:
+          - explain the policy
+          - summarize the safety rules
+
+    pii:
+      - name: restricted_pii
+        threshold: 0.85
+        include_history: false
+        pii_types_allowed:
+          - EMAIL_ADDRESS
+        description: Flag sensitive personal information.
+
+  decisions:
+    - name: block_jailbreak
+      description: Block detected jailbreak attempts.
+      priority: 1000
+      rules:
+        operator: AND
+        conditions:
+          - type: jailbreak
+            name: prompt_injection
+      modelRefs:
+        - model: openai/gpt-4o-mini
+      algorithm:
+        type: static
+
+    - name: code_to_claude_sonnet
+      description: Route coding tasks to Claude 3.5 Sonnet.
+      priority: 190
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: code_task
+      modelRefs:
+        - model: anthropic/claude-sonnet-4.6
+          use_reasoning: true
+      algorithm:
+        type: static
+      plugins:
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.90
+            ttl_seconds: 3600
+
+    - name: urgent_claude_haiku
+      description: Route urgent tasks to Claude Haiku for speed.
+      priority: 180
+      rules:
+        operator: AND
+        conditions:
+          - type: keyword
+            name: urgent_task
+      modelRefs:
+        - model: anthropic/claude-3.5-haiku
+          use_reasoning: false
+      algorithm:
+        type: static
+
+    - name: complex_confidence_route
+      description: Complex tasks — try gpt-4o-mini first, escalate to gpt-4o if uncertain.
+      priority: 150
+      rules:
+        operator: AND
+        conditions:
+          - type: complexity
+            name: needs_reasoning
+      modelRefs:
+        - model: openai/gpt-4o-mini
+          use_reasoning: false
+          weight: 0.4
+        - model: openai/gpt-4o
+          use_reasoning: true
+          weight: 0.6
+      algorithm:
+        type: confidence
+        confidence:
+          confidence_method: hybrid
+          threshold: 0.72
+          escalation_order: small_to_large
+          cost_quality_tradeoff: 0.45
+          on_error: skip
+      plugins:
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.88
+            ttl_seconds: 7200
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 5
+            similarity_threshold: 0.72
+            auto_store: true
+
+    - name: default_route
+      description: Default — fast and cheap with caching and memory.
+      priority: 100
+      rules:
+        operator: AND
+        conditions: []
+      modelRefs:
+        - model: openai/gpt-4o-mini
+          use_reasoning: false
+      algorithm:
+        type: static
+      plugins:
+        - type: semantic-cache
+          configuration:
+            enabled: true
+            similarity_threshold: 0.86
+            ttl_seconds: 7200
+        - type: memory
+          configuration:
+            enabled: true
+            retrieval_limit: 4
+            similarity_threshold: 0.74
+            auto_store: true
+        - type: response_jailbreak
+          configuration:
+            enabled: true
+            threshold: 0.85
+            action: annotate
+
+global:
+  router:
+    config_source: file
+    strategy: priority
+    include_config_models_in_list: true
+    clear_route_cache: false
+    streamed_body:
+      enabled: true
+      max_bytes: 1048576
+      timeout_sec: 15
+
+  services:
+    api:
+      batch_classification:
+        max_batch_size: 100
+        concurrency_threshold: 5
+        max_concurrency: 8
+        metrics:
+          enabled: true
+          sample_rate: 1.0
+
+    startup_status:
+      store_backend: file
+
+    observability:
+      tracing:
+        enabled: true
+        provider: opentelemetry
+        exporter:
+          type: otlp
+          endpoint: jaeger:4317
+          insecure: true
+        sampling:
+          type: traceidratio
+          rate: 1.0
+        resource:
+          service_name: vllm-semantic-router
+          service_version: v0.3.0
+          deployment_environment: local
+      metrics:
+        enabled: true
+        windowed_metrics:
+          enabled: true
+          time_windows: [1m, 5m, 1h]
+          update_interval: 30s
+          model_metrics: true
+
+    ratelimit:
+      fail_open: true
+      providers:
+        - type: local-limiter
+          domain: api
+          rules:
+            - name: default-per-minute
+              match: {}
+              requests_per_unit: 500
+              unit: minute
+
+    router_replay:
+      enabled: true
+      store_backend: postgres
+      ttl_seconds: 604800
+      async_writes: true
+      postgres:
+        host: postgres
+        port: 5432
+        database: vsr
+        user: router
+        password: router-secret
+        ssl_mode: disable
+        max_open_conns: 10
+        max_idle_conns: 5
+        conn_max_lifetime: 300
+        table_name: router_replay
+
+  stores:
+    semantic_cache:
+      enabled: true
+      backend_type: redis
+      similarity_threshold: 0.86
+      max_entries: 10000
+      ttl_seconds: 7200
+      eviction_policy: lru
+      embedding_model: mmbert
+      redis:
+        connection:
+          host: redis
+          port: 6379
+          database: 0
+          timeout: 5
+        index:
+          name: semantic_cache_idx
+          prefix: "vsr:cache:"
+          vector_field:
+            name: embedding
+            dimension: 768
+            metric_type: COSINE
+          index_type: HNSW
+          params:
+            M: 16
+            efConstruction: 200
+        search:
+          topk: 10
+        development:
+          drop_index_on_startup: false
+          auto_create_index: true
+          verbose_errors: false
+
+    memory:
+      enabled: true
+      backend: redis_cache
+      auto_store: true
+      embedding_model: bert
+      extraction_batch_size: 8
+      default_retrieval_limit: 5
+      default_similarity_threshold: 0.74
+      redis_cache:
+        enabled: true
+        address: "redis:6379"
+        ttl_seconds: 86400
+        db: 1
+        key_prefix: "memory_cache:"
+        password: ""
+
+  model_catalog:
+    embeddings:
+      semantic:
+        mmbert_model_path: models/mmbert-embed-32k-2d-matryoshka
+        use_cpu: true
+        embedding_config:
+          model_type: mmbert
+          preload_embeddings: true
+          target_dimension: 768
+          enable_soft_matching: true
+          top_k: 1
+          min_score_threshold: 0.45
+
+    system:
+      prompt_guard: models/mmbert32k-jailbreak-detector-merged
+      domain_classifier: models/mmbert32k-intent-classifier-merged
+      pii_classifier: models/mmbert32k-pii-detector-merged
+
+    modules:
+      prompt_compression:
+        enabled: true
+        max_tokens: 4096
+        min_length: 512
+        skip_signals: [jailbreak, pii]
+        textrank_weight: 0.4
+        position_weight: 0.2
+        tfidf_weight: 0.3
+        position_depth: 0.1
+        max_evaluation_chars: 0
+
+      prompt_guard:
+        enabled: true
+        model_id: models/mmbert32k-jailbreak-detector-merged
+        threshold: 0.7
+        use_cpu: true
+        use_mmbert_32k: true
+
+      classifier:
+        domain:
+          model_id: models/mmbert32k-intent-classifier-merged
+          threshold: 0.5
+          use_cpu: true
+          use_mmbert_32k: true
+          fallback_category: other
+        pii:
+          model_id: models/mmbert32k-pii-detector-merged
+          threshold: 0.85
+          use_cpu: true
+          use_mmbert_32k: true
+
+      complexity:
+        prototype_scoring:
+          enabled: true
+          cluster_similarity_threshold: 0.9
+          max_prototypes: 6
+          best_weight: 0.75
+          top_m: 2
+          margin_threshold: 0.0
+
+      hallucination_mitigation:
+        enabled: false
+
+      feedback_detector:
+        enabled: false
+
+      modality_detector:
+        enabled: false
+
+

@@ -4,6 +4,7 @@ import (
 	"context"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -328,8 +329,10 @@ func extractAccessToken(r *http.Request) string {
 }
 
 func requiresAuthentication(path string) bool {
+	if os.Getenv("DASHBOARD_AUTH_ENABLED") == "false" {
+		return false
+	}
 	path = strings.TrimSpace(strings.ToLower(path))
-
 	switch {
 	case strings.HasPrefix(path, "/api/auth/login"):
 		return false

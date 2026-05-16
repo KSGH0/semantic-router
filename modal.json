@@ -1,0 +1,58 @@
+{
+  "modal_version": "0.64.1",
+  "projects": [
+    {
+      "name": "project-alpha",
+      "region": "us-east",
+      "plan": "scale"
+    },
+    {
+      "name": "project-beta", 
+      "region": "us-east",
+      "plan": "scale"
+    }
+  ],
+  "apps": [
+    {
+      "name": "vllm-sr-router",
+      "path": ".",
+      "dockerfile": "Dockerfile.modal",
+      "env": {
+        "PORT": "8899",
+        "VLLM_SR_CONFIG": "/app/config.yaml"
+      },
+      "resources": {
+        "cpu": 2,
+        "memory": "4Gi",
+        "gpu": "T4"
+      },
+      "scaling": {
+        "min": 1,
+        "max": 2
+      }
+    },
+    {
+      "name": "vllm-sr-dashboard",
+      "path": ".",
+      "dockerfile": "Dockerfile.dashboard",
+      "env": {
+        "PORT": "8700",
+        "TARGET_ROUTER_API_URL": "http://vllm-sr-router:8080"
+      },
+      "resources": {
+        "cpu": 1,
+        "memory": "2Gi"
+      }
+    }
+  ],
+  "volumes": [
+    {
+      "name": "vllm-sr-data",
+      "size": "10Gi"
+    }
+  ],
+  "redis": {
+    "enabled": true,
+    "max_connections": 100
+  }
+}

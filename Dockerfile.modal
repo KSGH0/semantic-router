@@ -1,0 +1,269 @@
+# =============================================================================
+# Dockerfile.modal — vLLM Semantic Router for Modal.com
+#
+# Identical build pipeline to src/vllm-sr/Dockerfile but replaces
+# start-railway.sh (deleted) with start-modal.sh, which starts all services
+# in-process without Docker.
+#
+# Build stages:
+#   rust-builder  — Rust candle / ml / nlp bindings
+#   ml-builder    — ML binding
+#   nlp-builder   — NLP binding
+#   go-builder    — Go semantic router binary
+#   final         — Debian bookworm-slim runtime
+# =============================================================================
+
+ARG TARGETARCH
+ARG BUILDPLATFORM
+ARG GIT_SSL_NO_VERIFY=0
+ARG RUST_RUNTIME_COMPAT_IMAGE=rustlang/rust:nightly-bullseye
+ARG GO_RUNTIME_COMPAT_IMAGE=golang:1.24-bullseye
+
+# ── Stage 1: Rust candle-binding ─────────────────────────────────────────────
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS rust-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
+        libssl-dev:arm64 \
+        libssl-dev \
+        pkg-config && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+ENV PKG_CONFIG_ALLOW_CROSS=1
+ENV PKG_CONFIG_PATH_aarch64_unknown_linux_gnu=/usr/lib/aarch64-linux-gnu/pkgconfig
+
+COPY candle-binding/Cargo.toml candle-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi && \
+    rm -rf src
+
+COPY candle-binding/src/ ./src/
+COPY candle-binding/go.mod candle-binding/semantic-router.go ./
+
+RUN find target -name "libcandle_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libcandle_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      OPENSSL_LIB_DIR=/usr/lib/aarch64-linux-gnu \
+      cargo build --release --no-default-features --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release --no-default-features; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libcandle_semantic_router.so /build/out/ && \
+      (cp target/release/libcandle_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi
+
+# ── Stage 1a: Rust ml-binding ─────────────────────────────────────────────────
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS ml-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY ml-binding/Cargo.toml ml-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY ml-binding/src/ ./src/
+COPY ml-binding/go.mod ml-binding/ml_binding.go ./
+
+RUN find target -name "libml_semantic_router.so" -delete 2>/dev/null; \
+    find target -name "libml_semantic_router.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libml_semantic_router.so /build/out/ && \
+      (cp target/release/libml_semantic_router.a /build/out/ 2>/dev/null || true); \
+    fi
+
+# ── Stage 1b: Rust nlp-binding ────────────────────────────────────────────────
+FROM --platform=$BUILDPLATFORM ${RUST_RUNTIME_COMPAT_IMAGE} AS nlp-builder
+ARG TARGETARCH
+ARG GIT_SSL_NO_VERIFY
+WORKDIR /build
+ENV CARGO_NET_GIT_FETCH_WITH_CLI=true
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu && \
+      rm -rf /var/lib/apt/lists/* && \
+      rustup target add aarch64-unknown-linux-gnu; \
+    fi
+
+ENV CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER=aarch64-linux-gnu-gcc
+ENV CC_aarch64_unknown_linux_gnu=aarch64-linux-gnu-gcc
+ENV CXX_aarch64_unknown_linux_gnu=aarch64-linux-gnu-g++
+
+COPY nlp-binding/Cargo.toml nlp-binding/Cargo.loc[k] ./
+
+RUN [ "$GIT_SSL_NO_VERIFY" = "1" ] && git config --global http.sslVerify false || true; \
+    mkdir -p src && echo "pub fn _dummy() {}" > src/lib.rs && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi && \
+    rm -rf src
+
+COPY nlp-binding/src/ ./src/
+
+RUN find target -name "libnlp_binding.so" -delete 2>/dev/null; \
+    find target -name "libnlp_binding.a" -delete 2>/dev/null; \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cargo build --release --target aarch64-unknown-linux-gnu; \
+    else \
+      cargo build --release; \
+    fi
+
+RUN mkdir -p /build/out && \
+    if [ "$TARGETARCH" = "arm64" ]; then \
+      cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.so /build/out/ && \
+      (cp target/aarch64-unknown-linux-gnu/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    else \
+      cp target/release/libnlp_binding.so /build/out/ && \
+      (cp target/release/libnlp_binding.a /build/out/ 2>/dev/null || true); \
+    fi
+
+# ── Stage 2: Go semantic router ───────────────────────────────────────────────
+FROM --platform=$BUILDPLATFORM ${GO_RUNTIME_COMPAT_IMAGE} AS go-builder
+ARG TARGETARCH
+WORKDIR /build
+
+COPY --from=rust-builder /build/out/ /usr/local/lib/
+COPY --from=ml-builder /build/out/ /usr/local/lib/
+COPY --from=nlp-builder /build/out/ /usr/local/lib/
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+
+COPY --from=rust-builder /build/go.mod /build/semantic-router.go /build/../candle-binding/
+COPY ml-binding/go.mod ml-binding/ml_binding.go /build/../ml-binding/
+COPY --from=ml-builder /build/out/ /build/../ml-binding/target/release/
+COPY nlp-binding/go.mod nlp-binding/nlp_binding.go nlp-binding/nlp_binding_mock.go /build/../nlp-binding/
+COPY --from=nlp-builder /build/out/ /build/../nlp-binding/target/release/
+
+COPY src/semantic-router/ .
+
+RUN if [ "$TARGETARCH" = "arm64" ]; then \
+      dpkg --add-architecture arm64 && \
+      apt-get update && apt-get install -y \
+        gcc-aarch64-linux-gnu \
+        g++-aarch64-linux-gnu \
+        libssl-dev:arm64 && \
+      rm -rf /var/lib/apt/lists/* && \
+      CC=aarch64-linux-gnu-gcc \
+      CGO_ENABLED=1 GOOS=linux GOARCH=arm64 \
+      CGO_LDFLAGS="-L/usr/lib/aarch64-linux-gnu -lssl -lcrypto" \
+      go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
+    else \
+      CGO_ENABLED=1 go build -buildvcs=false -ldflags="-w -s" -o router ./cmd; \
+    fi
+
+# ── Stage 3: Runtime image ────────────────────────────────────────────────────
+FROM debian:bookworm-slim
+
+ENV LD_LIBRARY_PATH=/usr/local/lib
+ENV PORT=8899
+ENV VLLM_SR_CONFIG=/app/config/modal-config.yaml
+
+RUN set -eux; \
+    apt-get update; \
+    apt-get install -y --no-install-recommends \
+        bash \
+        ca-certificates \
+        curl \
+        libssl3 \
+        python3 \
+        python3-pip \
+        python3-venv \
+        redis-server; \
+    apt-get clean; \
+    rm -rf /var/lib/apt/lists/*
+
+ENV VIRTUAL_ENV=/opt/vllm-sr-venv
+RUN python3 -m venv "${VIRTUAL_ENV}"
+ENV PATH="${VIRTUAL_ENV}/bin:${PATH}"
+
+# Binaries from build stages
+COPY --from=envoyproxy/envoy:v1.34-latest /usr/local/bin/envoy /usr/local/bin/envoy
+COPY --from=go-builder /build/router /usr/local/bin/router
+COPY --from=rust-builder /build/out/libcandle_semantic_router.so /usr/local/lib/
+COPY --from=ml-builder /build/out/libml_semantic_router.so /usr/local/lib/
+COPY --from=nlp-builder /build/out/libnlp_binding.so /usr/local/lib/
+
+WORKDIR /app
+RUN mkdir -p /app /app/.vllm-sr /app/config /app/models
+
+# Config and CLI (for Envoy config generation via python3 -m cli.config_generator)
+COPY config/ /app/config/
+COPY src/vllm-sr/cli/ /app/cli/
+COPY src/vllm-sr/start-router.sh /app/start-router.sh
+
+# Modal-specific Envoy config — port 8899, no Authorino/ext_authz
+RUN mkdir -p /etc/envoy
+COPY envoy-modal.yaml /etc/envoy/envoy.yaml
+
+# huggingface-cli required by Go router to download ML models
+RUN python3 -m pip install --no-cache-dir 'huggingface_hub[cli]'
+
+# Modal startup script (replaces deleted start-railway.sh)
+COPY start-modal.sh /app/start-modal.sh
+RUN chmod +x /app/start-router.sh /app/start-modal.sh
+
+EXPOSE 50051 8080 9190 8899 6379
+
+ENTRYPOINT ["/app/start-modal.sh"]
+CMD []

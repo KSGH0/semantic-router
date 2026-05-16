@@ -56,6 +56,12 @@ bin/
 tools/bin/
 .vllm-sr-sim/
 
+# Modal credential/config files (stored in user home directory by default,
+# but ensure any local copies are also ignored)
+.modal-config.json
+.keys.enc
+.env
+
 # Model files (too large for git)
 *.pt
 *.pth
